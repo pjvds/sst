@@ -1,4 +1,4 @@
-import { ComponentResourceOptions, output } from "@pulumi/pulumi";
+import { all, ComponentResourceOptions, output } from "@pulumi/pulumi";
 import { Worker } from "./worker";
 import * as cloudflare from "@pulumi/cloudflare";
 import { Component, Transform, transform } from "../component";
@@ -140,10 +140,10 @@ export class Queue extends Component implements Link.Linkable {
    * });
    */
   public consume(
-    subscriber: Input<Worker>,
+    consumer: Input<Worker>,
     args?: QueueSubscriberArgs,
   ) {
-    output(subscriber).apply((subscriber) => {
+    all([this, consumer]).apply(([queue, consumer]) => {
       if (this.isSubscribed) {
         throw new VisibleError(
           `Cannot subscribe to the ${this.constructorName} queue more than once. An Queue can only have one push-based consumer.`,
@@ -152,20 +152,24 @@ export class Queue extends Component implements Link.Linkable {
       this.isSubscribed = true;
 
       return new cloudflare.QueueConsumer(
-        `${this.constructorName}Consumer`,
+        `${this.constructorName}QueueConsumer`,
         {
           accountId: DEFAULT_ACCOUNT_ID,
           queueId: this.queue.id,
           consumerId: this.queue.id,
-          scriptName: subscriber.nodes.worker.scriptName,
+          scriptName: consumer.nodes.worker.scriptName,
           type: "worker",
           settings: args,
         },
         {
           parent: this.queue,
-          dependsOn: [subscriber],
+          dependsOn: [consumer],
         }
       );
     })
   }
 }
+
+const __pulumiType = "sst:cloudflare:Queue";
+// @ts-expect-error
+Queue.__pulumiType = __pulumiType;
